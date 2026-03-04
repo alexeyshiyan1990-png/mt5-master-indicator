@@ -12,9 +12,9 @@
 #property indicator_width2  1
 #property indicator_label2  "Sell"
 
-#include <Config.mqh>
-#include <Handles.mqh>
-#include <Buffers.mqh>
+#include "..\..\Include\Config.mqh"
+#include "..\..\Include\Handles.mqh"
+#include "..\..\Include\Buffers.mqh"
 
 input int  LookbackBars      = 500;
 input bool UseSuperTrend1    = true;
