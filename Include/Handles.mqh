@@ -1,6 +1,7 @@
 #ifndef __MT5_MASTER_HANDLES_MQH__
 #define __MT5_MASTER_HANDLES_MQH__
 
+// Handle container/helpers are declared without static storage to avoid MT5 compiler errors.
 struct SModuleHandles
 {
    int superTrend1;
