@@ -20,9 +20,27 @@ enum EFilterReason
    REASON_NONE = 0,
    REASON_ST   = 1,
    REASON_MACD = 2,
-   REASON_ADX  = 4,
-   REASON_AO   = 8
+   REASON_AO   = 4,
+   REASON_ADX  = 8
 };
+
+string ExplainReasonMask(const int mask)
+{
+   if(mask == REASON_NONE)
+      return("NONE");
+
+   string explanation = "";
+   if((mask & REASON_ST) != 0)
+      explanation = "ST";
+   if((mask & REASON_MACD) != 0)
+      explanation = (explanation == "") ? "MACD" : explanation + "|MACD";
+   if((mask & REASON_AO) != 0)
+      explanation = (explanation == "") ? "AO" : explanation + "|AO";
+   if((mask & REASON_ADX) != 0)
+      explanation = (explanation == "") ? "ADX" : explanation + "|ADX";
+
+   return(explanation);
+}
 
 int EvaluateFilters(const FilterState &s, bool &allowBuy, bool &allowSell)
 {
