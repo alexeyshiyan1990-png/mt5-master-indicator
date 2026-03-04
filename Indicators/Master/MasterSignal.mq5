@@ -15,6 +15,7 @@
 #include "..\..\Include\Config.mqh"
 #include "..\..\Include\Handles.mqh"
 #include "..\..\Include\Buffers.mqh"
+#include "..\..\Include\FilterEngine.mqh"
 
 input int  LookbackBars      = 500;
 input bool ShowHistoryArrows = true;
@@ -41,17 +42,21 @@ int OnInit()
    g_handles.macd        = iCustom(_Symbol, _Period, "Indicators\\Core\\MACD_4Color");
    g_handles.rsi         = iCustom(_Symbol, _Period, "Indicators\\Core\\RSI_Filter");
    g_handles.alligator   = iCustom(_Symbol, _Period, "Indicators\\Core\\Alligator_Filter");
+   g_handles.ao          = iCustom(_Symbol, _Period, "Indicators\\Core\\AwesomeOscillator");
+   g_handles.adx         = iCustom(_Symbol, _Period, "Indicators\\Core\\ADX_Filter");
 
    if(g_handles.superTrend1 == INVALID_HANDLE ||
       g_handles.macd == INVALID_HANDLE ||
       g_handles.rsi == INVALID_HANDLE ||
-      g_handles.alligator == INVALID_HANDLE)
+      g_handles.alligator == INVALID_HANDLE ||
+      g_handles.ao == INVALID_HANDLE ||
+      g_handles.adx == INVALID_HANDLE)
    {
       Print("MasterSignal: failed to create one or more iCustom handles");
       return(INIT_FAILED);
    }
 
-   IndicatorSetString(INDICATOR_SHORTNAME, "MasterSignal (skeleton)");
+   IndicatorSetString(INDICATOR_SHORTNAME, "MasterSignal (filter engine)");
    return(INIT_SUCCEEDED);
 }
 
@@ -71,60 +76,73 @@ int OnCalculate(const int rates_total,
                 const long &volume[],
                 const int &spread[])
 {
-   if(rates_total <= 0)
+   if(rates_total < 2)
       return(0);
 
-   int bars_to_process = MathMin(rates_total, MathMax(1, LookbackBars));
-   int start = ShowHistoryArrows ? bars_to_process - 1 : 0;
+   int bars_to_process = MathMin(MathMax(1, LookbackBars), rates_total - 1);
 
-   if(ShowHistoryArrows)
+   for(int i = 0; i <= bars_to_process; ++i)
    {
-      int clear_from = (prev_calculated > 0) ? MathMin(prev_calculated, rates_total) - 1 : bars_to_process - 1;
-      for(int i = clear_from; i >= 0 && i >= rates_total - bars_to_process; --i)
-      {
-         g_buffers.buyArrow[i] = MT5_EMPTY_VALUE;
-         g_buffers.sellArrow[i] = MT5_EMPTY_VALUE;
-      }
-   }
-   else
-   {
-      g_buffers.buyArrow[0] = MT5_EMPTY_VALUE;
-      g_buffers.sellArrow[0] = MT5_EMPTY_VALUE;
+      g_buffers.buyArrow[i] = MT5_EMPTY_VALUE;
+      g_buffers.sellArrow[i] = MT5_EMPTY_VALUE;
    }
 
-   double st1_dir[], macd_hist[], rsi_val[], alligator_dir[];
-   ArraySetAsSeries(st1_dir, true);
+   double st_dir[], macd_hist[], macd_color[], ao_val[], ao_color[], adx_val[], plus_di[], minus_di[];
+   ArraySetAsSeries(st_dir, true);
    ArraySetAsSeries(macd_hist, true);
-   ArraySetAsSeries(rsi_val, true);
-   ArraySetAsSeries(alligator_dir, true);
+   ArraySetAsSeries(macd_color, true);
+   ArraySetAsSeries(ao_val, true);
+   ArraySetAsSeries(ao_color, true);
+   ArraySetAsSeries(adx_val, true);
+   ArraySetAsSeries(plus_di, true);
+   ArraySetAsSeries(minus_di, true);
 
-   if(CopyBuffer(g_handles.superTrend1, 1, 0, bars_to_process, st1_dir) <= 0) return(prev_calculated);
-   if(CopyBuffer(g_handles.macd, 2, 0, bars_to_process, macd_hist) <= 0) return(prev_calculated);
-   if(CopyBuffer(g_handles.rsi, 0, 0, bars_to_process, rsi_val) <= 0) return(prev_calculated);
-   if(CopyBuffer(g_handles.alligator, 0, 0, bars_to_process, alligator_dir) <= 0) return(prev_calculated);
+   int copy_count = bars_to_process + 1;
 
-   int begin = ShowHistoryArrows ? start : 0;
-   int end = 0;
+   if(CopyBuffer(g_handles.superTrend1, 1, 0, copy_count, st_dir) <= 0) return(prev_calculated);
+   if(CopyBuffer(g_handles.macd, 2, 0, copy_count, macd_hist) <= 0) return(prev_calculated);
+   if(CopyBuffer(g_handles.macd, 3, 0, copy_count, macd_color) <= 0) return(prev_calculated);
+   if(CopyBuffer(g_handles.ao, 0, 0, copy_count, ao_val) <= 0) return(prev_calculated);
+   if(CopyBuffer(g_handles.ao, 1, 0, copy_count, ao_color) <= 0) return(prev_calculated);
+   if(CopyBuffer(g_handles.adx, 0, 0, copy_count, adx_val) <= 0) return(prev_calculated);
+   if(CopyBuffer(g_handles.adx, 1, 0, copy_count, plus_di) <= 0) return(prev_calculated);
+   if(CopyBuffer(g_handles.adx, 2, 0, copy_count, minus_di) <= 0) return(prev_calculated);
 
-   for(int i = begin; i >= end; --i)
+   int first_shift = ShowHistoryArrows ? bars_to_process : 1;
+
+   for(int shift = first_shift; shift >= 1; --shift)
    {
-      bool buy  = (st1_dir[i] == 1.0) && (macd_hist[i] > 0.0) && (rsi_val[i] > 50.0);
-      bool sell = (st1_dir[i] == -1.0) && (macd_hist[i] < 0.0) && (rsi_val[i] < 50.0);
+      FilterState s;
+      s.st_dir = st_dir[shift];
+      s.macd_hist = macd_hist[shift];
+      s.macd_color = macd_color[shift];
+      s.ao = ao_val[shift];
+      s.ao_color = ao_color[shift];
+      s.adx = adx_val[shift];
+      s.plusDI = plus_di[shift];
+      s.minusDI = minus_di[shift];
+
+      bool allowBuy = false;
+      bool allowSell = false;
+      EvaluateFilters(s, allowBuy, allowSell);
+
+      bool buy = allowBuy;
+      bool sell = allowSell;
 
       if(buy && !sell)
       {
-         g_buffers.buyArrow[i]  = low[i] - (10 * _Point);
-         g_buffers.sellArrow[i] = MT5_EMPTY_VALUE;
+         g_buffers.buyArrow[shift]  = low[shift] - (10 * _Point);
+         g_buffers.sellArrow[shift] = MT5_EMPTY_VALUE;
       }
       else if(sell && !buy)
       {
-         g_buffers.sellArrow[i] = high[i] + (10 * _Point);
-         g_buffers.buyArrow[i]  = MT5_EMPTY_VALUE;
+         g_buffers.sellArrow[shift] = high[shift] + (10 * _Point);
+         g_buffers.buyArrow[shift]  = MT5_EMPTY_VALUE;
       }
       else
       {
-         g_buffers.buyArrow[i]  = MT5_EMPTY_VALUE;
-         g_buffers.sellArrow[i] = MT5_EMPTY_VALUE;
+         g_buffers.buyArrow[shift]  = MT5_EMPTY_VALUE;
+         g_buffers.sellArrow[shift] = MT5_EMPTY_VALUE;
       }
    }
 

@@ -4,4 +4,17 @@
 // Shared constants for the modular Master indicator
 #define MT5_EMPTY_VALUE EMPTY_VALUE
 
+input bool UseST = true;
+
+input bool UseMACD = true;
+input bool MACD_UseColorFilter = false;
+
+input bool UseAO = true;
+input bool AO_UseSignFilter = true;
+input bool AO_UseColorFilter = false;
+
+input bool UseADX = true;
+input double ADX_Min = 20.0;
+input bool ADX_UseDI_Direction = true;
+
 #endif // __MT5_MASTER_CONFIG_MQH__

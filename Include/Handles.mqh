@@ -8,6 +8,8 @@ struct SModuleHandles
    int macd;
    int rsi;
    int alligator;
+   int ao;
+   int adx;
 };
 
 void InitHandles(SModuleHandles &h)
@@ -17,6 +19,8 @@ void InitHandles(SModuleHandles &h)
    h.macd        = INVALID_HANDLE;
    h.rsi         = INVALID_HANDLE;
    h.alligator   = INVALID_HANDLE;
+   h.ao          = INVALID_HANDLE;
+   h.adx         = INVALID_HANDLE;
 }
 
 void ReleaseHandle(int &handle)
@@ -35,6 +39,8 @@ void ReleaseAllHandles(SModuleHandles &h)
    ReleaseHandle(h.macd);
    ReleaseHandle(h.rsi);
    ReleaseHandle(h.alligator);
+   ReleaseHandle(h.ao);
+   ReleaseHandle(h.adx);
 }
 
 #endif // __MT5_MASTER_HANDLES_MQH__
