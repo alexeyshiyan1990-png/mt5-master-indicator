@@ -1,0 +1,172 @@
+#property indicator_chart_window
+#property indicator_buffers 2
+#property indicator_plots   2
+
+#property indicator_type1   DRAW_ARROW
+#property indicator_color1  clrLime
+#property indicator_width1  1
+#property indicator_label1  "Buy"
+
+#property indicator_type2   DRAW_ARROW
+#property indicator_color2  clrRed
+#property indicator_width2  1
+#property indicator_label2  "Sell"
+
+#include <Config.mqh>
+#include <Handles.mqh>
+#include <Buffers.mqh>
+
+input int  LookbackBars      = 500;
+input bool UseSuperTrend1    = true;
+input bool UseSuperTrend2    = false;
+input bool UseMACD           = true;
+input bool UseRSI            = false;
+input bool UseAlligator      = false;
+input bool ShowHistoryArrows = true;
+
+SMasterBuffers g_buffers;
+SModuleHandles g_handles;
+
+int OnInit()
+{
+   SetIndexBuffer(0, g_buffers.buyArrow, INDICATOR_DATA);
+   SetIndexBuffer(1, g_buffers.sellArrow, INDICATOR_DATA);
+
+   ArraySetAsSeries(g_buffers.buyArrow, true);
+   ArraySetAsSeries(g_buffers.sellArrow, true);
+
+   PlotIndexSetInteger(0, PLOT_ARROW, 233);
+   PlotIndexSetInteger(1, PLOT_ARROW, 234);
+   PlotIndexSetDouble(0, PLOT_EMPTY_VALUE, MT5_EMPTY_VALUE);
+   PlotIndexSetDouble(1, PLOT_EMPTY_VALUE, MT5_EMPTY_VALUE);
+
+   InitHandles(g_handles);
+
+   if(UseSuperTrend1)
+      g_handles.superTrend1 = iCustom(_Symbol, _Period, "Indicators\\Core\\SuperTrend");
+   if(UseSuperTrend2)
+      g_handles.superTrend2 = iCustom(_Symbol, _Period, "Indicators\\Core\\SuperTrend");
+   if(UseMACD)
+      g_handles.macd = iCustom(_Symbol, _Period, "Indicators\\Core\\MACD_4Color");
+   if(UseRSI)
+      g_handles.rsi = iCustom(_Symbol, _Period, "Indicators\\Core\\RSI_Filter");
+   if(UseAlligator)
+      g_handles.alligator = iCustom(_Symbol, _Period, "Indicators\\Core\\Alligator_Filter");
+
+   if((UseSuperTrend1 && g_handles.superTrend1 == INVALID_HANDLE) ||
+      (UseSuperTrend2 && g_handles.superTrend2 == INVALID_HANDLE) ||
+      (UseMACD && g_handles.macd == INVALID_HANDLE) ||
+      (UseRSI && g_handles.rsi == INVALID_HANDLE) ||
+      (UseAlligator && g_handles.alligator == INVALID_HANDLE))
+   {
+      Print("MasterSignal: failed to create one or more iCustom handles");
+      return(INIT_FAILED);
+   }
+
+   IndicatorSetString(INDICATOR_SHORTNAME, "MasterSignal (skeleton)");
+   return(INIT_SUCCEEDED);
+}
+
+void OnDeinit(const int reason)
+{
+   ReleaseAllHandles(g_handles);
+}
+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])
+{
+   if(rates_total <= 0)
+      return(0);
+
+   int bars_to_process = MathMin(rates_total, MathMax(1, LookbackBars));
+   int start = ShowHistoryArrows ? bars_to_process - 1 : 0;
+
+   if(ShowHistoryArrows)
+   {
+      int clear_from = (prev_calculated > 0) ? MathMin(prev_calculated, rates_total) - 1 : bars_to_process - 1;
+      for(int i = clear_from; i >= 0 && i >= rates_total - bars_to_process; --i)
+      {
+         g_buffers.buyArrow[i] = MT5_EMPTY_VALUE;
+         g_buffers.sellArrow[i] = MT5_EMPTY_VALUE;
+      }
+   }
+   else
+   {
+      g_buffers.buyArrow[0] = MT5_EMPTY_VALUE;
+      g_buffers.sellArrow[0] = MT5_EMPTY_VALUE;
+   }
+
+   double st1_dir[], st2_dir[], macd_hist[], rsi_val[], alligator_dir[];
+   ArraySetAsSeries(st1_dir, true);
+   ArraySetAsSeries(st2_dir, true);
+   ArraySetAsSeries(macd_hist, true);
+   ArraySetAsSeries(rsi_val, true);
+   ArraySetAsSeries(alligator_dir, true);
+
+   if(UseSuperTrend1 && CopyBuffer(g_handles.superTrend1, 1, 0, bars_to_process, st1_dir) <= 0) return(prev_calculated);
+   if(UseSuperTrend2 && CopyBuffer(g_handles.superTrend2, 1, 0, bars_to_process, st2_dir) <= 0) return(prev_calculated);
+   if(UseMACD && CopyBuffer(g_handles.macd, 2, 0, bars_to_process, macd_hist) <= 0) return(prev_calculated);
+   if(UseRSI && CopyBuffer(g_handles.rsi, 0, 0, bars_to_process, rsi_val) <= 0) return(prev_calculated);
+   if(UseAlligator && CopyBuffer(g_handles.alligator, 0, 0, bars_to_process, alligator_dir) <= 0) return(prev_calculated);
+
+   int begin = ShowHistoryArrows ? start : 0;
+   int end = 0;
+
+   for(int i = begin; i >= end; --i)
+   {
+      bool buy  = true;
+      bool sell = true;
+
+      if(UseSuperTrend1)
+      {
+         buy  = buy  && (st1_dir[i] > 0.0);
+         sell = sell && (st1_dir[i] < 0.0);
+      }
+      if(UseSuperTrend2)
+      {
+         buy  = buy  && (st2_dir[i] > 0.0);
+         sell = sell && (st2_dir[i] < 0.0);
+      }
+      if(UseMACD)
+      {
+         buy  = buy  && (macd_hist[i] > 0.0);
+         sell = sell && (macd_hist[i] < 0.0);
+      }
+      if(UseRSI)
+      {
+         buy  = buy  && (rsi_val[i] > 50.0);
+         sell = sell && (rsi_val[i] < 50.0);
+      }
+      if(UseAlligator)
+      {
+         buy  = buy  && (alligator_dir[i] > 0.0);
+         sell = sell && (alligator_dir[i] < 0.0);
+      }
+
+      if(buy && !sell)
+      {
+         g_buffers.buyArrow[i]  = low[i] - (10 * _Point);
+         g_buffers.sellArrow[i] = MT5_EMPTY_VALUE;
+      }
+      else if(sell && !buy)
+      {
+         g_buffers.sellArrow[i] = high[i] + (10 * _Point);
+         g_buffers.buyArrow[i]  = MT5_EMPTY_VALUE;
+      }
+      else
+      {
+         g_buffers.buyArrow[i]  = MT5_EMPTY_VALUE;
+         g_buffers.sellArrow[i] = MT5_EMPTY_VALUE;
+      }
+   }
+
+   return(rates_total);
+}
