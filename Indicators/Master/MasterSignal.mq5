@@ -83,12 +83,13 @@ int OnInit()
 
    InitHandles(g_handles);
 
-   g_handles.superTrend1 = CreateHandleWithDiagnostics("SuperTrend", "Indicators\\Core\\SuperTrend");
-   g_handles.macd        = CreateHandleWithDiagnostics("MACD_4Color", "Indicators\\Core\\MACD_4Color");
-   g_handles.rsi         = CreateHandleWithDiagnostics("RSI_Filter", "Indicators\\Core\\RSI_Filter");
-   g_handles.alligator   = CreateHandleWithDiagnostics("Alligator_Filter", "Indicators\\Core\\Alligator_Filter");
-   g_handles.ao          = CreateHandleWithDiagnostics("AwesomeOscillator", "Indicators\\Core\\AwesomeOscillator");
-   g_handles.adx         = CreateHandleWithDiagnostics("ADX_Filter", "Indicators\\Core\\ADX_Filter");
+   // Paths for iCustom are relative to MQL5/Indicators.
+   g_handles.superTrend1 = CreateHandleWithDiagnostics("SuperTrend", "Core\\SuperTrend");
+   g_handles.macd        = CreateHandleWithDiagnostics("MACD_4Color", "Core\\MACD_4Color");
+   g_handles.rsi         = CreateHandleWithDiagnostics("RSI_Filter", "Core\\RSI_Filter");
+   g_handles.alligator   = CreateHandleWithDiagnostics("Alligator_Filter", "Core\\Alligator_Filter");
+   g_handles.ao          = CreateHandleWithDiagnostics("AwesomeOscillator", "Core\\AwesomeOscillator");
+   g_handles.adx         = CreateHandleWithDiagnostics("ADX_Filter", "Core\\ADX_Filter");
 
    if(g_handles.superTrend1 == INVALID_HANDLE ||
       g_handles.macd == INVALID_HANDLE ||
