@@ -22,6 +22,51 @@ input bool ShowHistoryArrows = true;
 
 SMasterBuffers g_buffers;
 SModuleHandles g_handles;
+datetime g_lastDebugLogTime = 0;
+
+void LogOncePerNSeconds(const string text)
+{
+   if(!Debug)
+      return;
+
+   datetime now = TimeCurrent();
+   int everySeconds = MathMax(1, DebugLogEveryNSeconds);
+   if(g_lastDebugLogTime != 0 && (now - g_lastDebugLogTime) < everySeconds)
+      return;
+
+   g_lastDebugLogTime = now;
+   Print(text);
+}
+
+int CreateHandleWithDiagnostics(const string module, const string path)
+{
+   Print("INFO: iCustom path for ", module, " = ", path);
+   ResetLastError();
+   int handle = iCustom(_Symbol, _Period, path);
+   if(handle == INVALID_HANDLE)
+      Print("ERROR: iCustom failed for ", module, ", path=", path, ", err=", GetLastError());
+   return(handle);
+}
+
+bool CopyBufferOrLog(const int handle,
+                     const string module,
+                     const int bufferIndex,
+                     const int shift,
+                     const int count,
+                     double &target[])
+{
+   ResetLastError();
+   int copied = CopyBuffer(handle, bufferIndex, shift, count, target);
+   if(copied <= 0)
+   {
+      Print("ERROR: CopyBuffer failed ", module,
+            " buffer=", bufferIndex,
+            " shift=", shift,
+            " err=", GetLastError());
+      return(false);
+   }
+   return(true);
+}
 
 int OnInit()
 {
@@ -38,12 +83,12 @@ int OnInit()
 
    InitHandles(g_handles);
 
-   g_handles.superTrend1 = iCustom(_Symbol, _Period, "Indicators\\Core\\SuperTrend");
-   g_handles.macd        = iCustom(_Symbol, _Period, "Indicators\\Core\\MACD_4Color");
-   g_handles.rsi         = iCustom(_Symbol, _Period, "Indicators\\Core\\RSI_Filter");
-   g_handles.alligator   = iCustom(_Symbol, _Period, "Indicators\\Core\\Alligator_Filter");
-   g_handles.ao          = iCustom(_Symbol, _Period, "Indicators\\Core\\AwesomeOscillator");
-   g_handles.adx         = iCustom(_Symbol, _Period, "Indicators\\Core\\ADX_Filter");
+   g_handles.superTrend1 = CreateHandleWithDiagnostics("SuperTrend", "Indicators\\Core\\SuperTrend");
+   g_handles.macd        = CreateHandleWithDiagnostics("MACD_4Color", "Indicators\\Core\\MACD_4Color");
+   g_handles.rsi         = CreateHandleWithDiagnostics("RSI_Filter", "Indicators\\Core\\RSI_Filter");
+   g_handles.alligator   = CreateHandleWithDiagnostics("Alligator_Filter", "Indicators\\Core\\Alligator_Filter");
+   g_handles.ao          = CreateHandleWithDiagnostics("AwesomeOscillator", "Indicators\\Core\\AwesomeOscillator");
+   g_handles.adx         = CreateHandleWithDiagnostics("ADX_Filter", "Indicators\\Core\\ADX_Filter");
 
    if(g_handles.superTrend1 == INVALID_HANDLE ||
       g_handles.macd == INVALID_HANDLE ||
@@ -99,14 +144,14 @@ int OnCalculate(const int rates_total,
 
    int copy_count = bars_to_process + 1;
 
-   if(CopyBuffer(g_handles.superTrend1, 1, 0, copy_count, st_dir) <= 0) return(prev_calculated);
-   if(CopyBuffer(g_handles.macd, 2, 0, copy_count, macd_hist) <= 0) return(prev_calculated);
-   if(CopyBuffer(g_handles.macd, 3, 0, copy_count, macd_color) <= 0) return(prev_calculated);
-   if(CopyBuffer(g_handles.ao, 0, 0, copy_count, ao_val) <= 0) return(prev_calculated);
-   if(CopyBuffer(g_handles.ao, 1, 0, copy_count, ao_color) <= 0) return(prev_calculated);
-   if(CopyBuffer(g_handles.adx, 0, 0, copy_count, adx_val) <= 0) return(prev_calculated);
-   if(CopyBuffer(g_handles.adx, 1, 0, copy_count, plus_di) <= 0) return(prev_calculated);
-   if(CopyBuffer(g_handles.adx, 2, 0, copy_count, minus_di) <= 0) return(prev_calculated);
+   if(!CopyBufferOrLog(g_handles.superTrend1, "SuperTrend", 1, 0, copy_count, st_dir)) return(prev_calculated);
+   if(!CopyBufferOrLog(g_handles.macd, "MACD_4Color", 2, 0, copy_count, macd_hist)) return(prev_calculated);
+   if(!CopyBufferOrLog(g_handles.macd, "MACD_4Color", 3, 0, copy_count, macd_color)) return(prev_calculated);
+   if(!CopyBufferOrLog(g_handles.ao, "AwesomeOscillator", 0, 0, copy_count, ao_val)) return(prev_calculated);
+   if(!CopyBufferOrLog(g_handles.ao, "AwesomeOscillator", 1, 0, copy_count, ao_color)) return(prev_calculated);
+   if(!CopyBufferOrLog(g_handles.adx, "ADX_Filter", 0, 0, copy_count, adx_val)) return(prev_calculated);
+   if(!CopyBufferOrLog(g_handles.adx, "ADX_Filter", 1, 0, copy_count, plus_di)) return(prev_calculated);
+   if(!CopyBufferOrLog(g_handles.adx, "ADX_Filter", 2, 0, copy_count, minus_di)) return(prev_calculated);
 
    int first_shift = ShowHistoryArrows ? bars_to_process : 1;
 
@@ -124,7 +169,23 @@ int OnCalculate(const int rates_total,
 
       bool allowBuy = false;
       bool allowSell = false;
-      EvaluateFilters(s, allowBuy, allowSell);
+      int reasonMask = EvaluateFilters(s, allowBuy, allowSell);
+
+      LogOncePerNSeconds(StringFormat(
+         "DEBUG: shift=%d time=%s st_dir=%.2f macd_hist=%.5f ao=%.5f adx=%.5f plusDI=%.5f minusDI=%.5f allowBuy=%s allowSell=%s reasonMask=%d (%s)",
+         shift,
+         TimeToString(time[shift], TIME_DATE | TIME_SECONDS),
+         s.st_dir,
+         s.macd_hist,
+         s.ao,
+         s.adx,
+         s.plusDI,
+         s.minusDI,
+         allowBuy ? "true" : "false",
+         allowSell ? "true" : "false",
+         reasonMask,
+         ExplainReasonMask(reasonMask)
+      ));
 
       bool buy = allowBuy;
       bool sell = allowSell;

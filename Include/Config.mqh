@@ -17,4 +17,7 @@ input bool UseADX = true;
 input double ADX_Min = 20.0;
 input bool ADX_UseDI_Direction = true;
 
+input bool Debug = true;
+input int DebugLogEveryNSeconds = 10;
+
 #endif // __MT5_MASTER_CONFIG_MQH__
